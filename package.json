@@ -1,0 +1,13 @@
+{
+  "name": "astro-tiny-todo-ultra",
+  "dependencies": {
+    "astro": "^5.13.5"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  }
+}

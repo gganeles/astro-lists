@@ -1,0 +1,663 @@
+---
+import Layout from "../Layouts/main.astro";
+import { readFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Enable server-side rendering to access URL parameters
+export const prerender = false;
+
+const HERE = dirname(fileURLToPath(import.meta.url)); // .../src/pages
+const DB = resolve(HERE, "../../lists.json"); // lists.json in project root
+
+interface ListItem {
+    text: string;
+    completed: boolean;
+    subItems?: ListItem[];
+}
+
+interface List {
+    id: string;
+    name: string;
+    items: ListItem[];
+}
+
+interface Database {
+    lists: List[];
+}
+
+// Read lists from database
+let lists: List[] = [];
+try {
+    const data = await readFile(DB, "utf8");
+    const db: Database = JSON.parse(data);
+    lists = db.lists;
+} catch (error) {
+    console.log(
+        "No database file found or error reading it, starting with empty lists",
+    );
+    lists = [];
+}
+
+// Get active tab from URL parameter
+const url = new URL(Astro.request.url);
+const tabParam = url.searchParams.get("tab");
+const activeTab = tabParam ? parseInt(tabParam, 10) : 0;
+
+// Ensure activeTab is within bounds
+const currentTab = Math.max(0, Math.min(activeTab, lists.length - 1));
+const currentList = lists.length > 0 ? lists[currentTab] : null;
+---
+
+<Layout lists={lists} activeTab={currentTab}>
+    {
+        currentList ? (
+            <div>
+                <h2>{currentList.name || "Untitled"}</h2>
+
+                <div class="list-container">
+                    {currentList.items.map((item, index) => (
+                        <div class="item-group">
+                            <div class="list-item" data-index={index}>
+                                <input
+                                    type="checkbox"
+                                    checked={item.completed}
+                                    class="item-checkbox"
+                                />
+                                <input
+                                    type="text"
+                                    value={item.text}
+                                    class="item-text"
+                                    style={
+                                        item.completed
+                                            ? "text-decoration: line-through; color: #888;"
+                                            : ""
+                                    }
+                                />
+                                <button class="add-sub-btn" data-parent-index={index} title="Add sub-item">
+                                    +
+                                </button>
+                                <button class="delete-btn" title="Delete item">
+                                    ×
+                                </button>
+                            </div>
+                            {item.subItems && item.subItems.map((subItem, subIndex) => (
+                                <div class="list-item sub-item" data-index={index} data-sub-index={subIndex}>
+                                    <input
+                                        type="checkbox"
+                                        checked={subItem.completed}
+                                        class="item-checkbox sub-item-checkbox"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={subItem.text}
+                                        placeholder={subItem.text ? "" : "New sub-item..."}
+                                        class="item-text sub-item-text"
+                                        style={
+                                            subItem.completed
+                                                ? "text-decoration: line-through; color: #888;"
+                                                : ""
+                                        }
+                                    />
+                                    <button class="delete-btn sub-delete-btn" title="Delete sub-item">
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                    <div class="list-item add-item">
+                        <input
+                            type="checkbox"
+                            disabled
+                            class="item-checkbox add-item-checkbox"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Add new item..."
+                            class="item-text new-item-input"
+                        />
+                    </div>
+                </div>
+
+                {currentList.items.length === 0 && (
+                    <p style="color: #666; font-style: italic;">
+                        This list is empty.
+                    </p>
+                )}
+            </div>
+        ) : (
+            <div class="no-lists">
+                <h2>No Lists Yet</h2>
+                <p>
+                    Click the <strong>+ New List</strong> button in the tab bar
+                    above to create your first list!
+                </p>
+            </div>
+        )
+    }
+
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #fafafa;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border-color: #e1e5e9;
+            --border-light: #f0f0f0;
+            --hover-bg: #f8f9fa;
+            --focus-color: #0077ff;
+            --focus-shadow: rgba(0, 119, 255, 0.1);
+            --button-success: #28a745;
+            --button-danger: #ff4757;
+            --new-item-bg: #f8fdff;
+            --new-item-border: #17a2b8;
+            --new-item-shadow: rgba(23, 162, 184, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #404040;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --text-muted: #808080;
+            --border-color: #404040;
+            --border-light: #2d2d2d;
+            --hover-bg: #333333;
+            --focus-color: #4a9eff;
+            --focus-shadow: rgba(74, 158, 255, 0.2);
+            --button-success: #28a745;
+            --button-danger: #ff4757;
+            --new-item-bg: #1a2a3a;
+            --new-item-border: #4a9eff;
+            --new-item-shadow: rgba(74, 158, 255, 0.2);
+        }
+
+        .list-container {
+            margin: 20px 0;
+        }
+
+        .item-group {
+            margin-bottom: 4px;
+        }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .sub-item {
+            margin-left: 24px;
+            padding-left: 16px;
+            border-left: 2px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+        }
+
+        .sub-item .item-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .sub-item .item-checkbox {
+            transform: scale(1.0);
+        }
+
+        .sub-item .delete-btn {
+            width: 20px;
+            height: 20px;
+            font-size: 14px;
+        }
+
+        .add-sub-btn {
+            margin-left: 8px;
+            background: var(--button-success);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .add-sub-btn:hover {
+            opacity: 1;
+        }
+
+        .item-checkbox {
+            margin-right: 12px;
+            transform: scale(1.2);
+        }
+
+        .item-text {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            font-size: 16px;
+            background: transparent;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+        }
+
+        .item-text:hover {
+            background: var(--hover-bg);
+            border-color: var(--border-color);
+        }
+
+        .item-text:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            background: var(--bg-primary);
+            box-shadow: 0 0 0 2px var(--focus-shadow);
+        }
+
+        .delete-btn {
+            margin-left: 8px;
+            background: var(--button-danger);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+        }
+
+        .add-item {
+            opacity: 0.6;
+        }
+
+        .add-item-checkbox {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .add-item .item-text {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .add-item .item-text:focus {
+            color: var(--text-primary);
+            font-style: normal;
+            opacity: 1;
+        }
+
+        /* Global styles for dynamically created elements */
+        :global(.new-sub-item-container) {
+            display: flex;
+            align-items: center;
+            background-color: var(--new-item-bg) !important;
+            border-left: 3px solid var(--new-item-border) !important;
+            margin-left: 24px;
+            padding-left: 16px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-light);
+            box-sizing: border-box;
+        }
+
+        /* New sub-item input styles with global scope */
+        :global(.sub-item.new-sub-item-container .new-sub-item) {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--new-item-border) !important;
+            border-radius: 4px;
+            background: var(--bg-primary) !important;
+            box-shadow: 0 0 0 2px var(--new-item-shadow) !important;
+            color: var(--text-primary) !important;
+            font-style: normal !important;
+            font-size: 14px !important;
+            transition: all 0.2s ease;
+        }
+
+        :global(.sub-item.new-sub-item-container .new-sub-item::placeholder) {
+            color: var(--text-muted) !important;
+            font-style: italic !important;
+        }
+
+        :global(.sub-item.new-sub-item-container .new-sub-item:focus) {
+            outline: none;
+            border-color: var(--new-item-border);
+            background: var(--bg-primary);
+            box-shadow: 0 0 0 2px var(--new-item-shadow);
+        }
+
+        /* Global styles for dynamic sub-item elements */
+        :global(.new-sub-item-container .item-checkbox) {
+            margin-right: 12px;
+            transform: scale(1.0);
+        }
+
+        :global(.new-sub-item-container .delete-btn) {
+            margin-left: 8px;
+            background: var(--button-danger);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        :global(.new-sub-item-container .delete-btn:hover) {
+            opacity: 1;
+        }
+
+        .new-item-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .new-item-input:focus {
+            outline: none;
+            border-color: var(--focus-color);
+            box-shadow: 0 0 0 2px var(--focus-shadow);
+        }
+
+        .no-lists {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+    </style>
+
+    <script>
+        // Database operations
+        async function loadDatabase() {
+            try {
+                const response = await fetch("/todo");
+                if (response.ok) {
+                    return await response.json();
+                }
+                return { lists: [] };
+            } catch (error) {
+                console.error("Error loading database:", error);
+                return { lists: [] };
+            }
+        }
+
+        async function saveDatabase(data) {
+            try {
+                const response = await fetch("/todo", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data),
+                });
+                return response.ok;
+            } catch (error) {
+                console.error("Error saving database:", error);
+                return false;
+            }
+        }
+
+        // Handle checkbox changes (both main items and sub-items)
+        document.querySelectorAll(".item-checkbox:not(.add-item-checkbox)").forEach((checkbox) => {
+            checkbox.addEventListener("change", async function () {
+                const textInput = this.parentNode.querySelector(".item-text");
+                const itemIndex = parseInt(this.parentNode.dataset.index);
+                const subIndex = this.parentNode.dataset.subIndex;
+
+                if (this.checked) {
+                    textInput.style.textDecoration = "line-through";
+                    textInput.style.color = "#888";
+                } else {
+                    textInput.style.textDecoration = "none";
+                    textInput.style.color = "inherit";
+                }
+
+                // Update database
+                const data = await loadDatabase();
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get("tab");
+                const activeTab = tabParam ? parseInt(tabParam) : 0;
+                
+                if (data.lists[activeTab] && data.lists[activeTab].items[itemIndex]) {
+                    if (subIndex !== undefined) {
+                        // Sub-item
+                        const subIdx = parseInt(subIndex);
+                        if (data.lists[activeTab].items[itemIndex].subItems && 
+                            data.lists[activeTab].items[itemIndex].subItems[subIdx]) {
+                            data.lists[activeTab].items[itemIndex].subItems[subIdx].completed = this.checked;
+                        }
+                    } else {
+                        // Main item
+                        data.lists[activeTab].items[itemIndex].completed = this.checked;
+                    }
+                    await saveDatabase(data);
+                }
+            });
+        });
+
+        // Handle item text changes (both main items and sub-items)
+        document.querySelectorAll(".item-text:not(.new-item-input)").forEach((input) => {
+            input.addEventListener("blur", async function () {
+                const itemIndex = parseInt(this.parentNode.dataset.index);
+                const subIndex = this.parentNode.dataset.subIndex;
+
+                // Update database
+                const data = await loadDatabase();
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get("tab");
+                const activeTab = tabParam ? parseInt(tabParam) : 0;
+                
+                if (data.lists[activeTab] && data.lists[activeTab].items[itemIndex]) {
+                    if (subIndex !== undefined) {
+                        // Sub-item
+                        const subIdx = parseInt(subIndex);
+                        if (data.lists[activeTab].items[itemIndex].subItems && 
+                            data.lists[activeTab].items[itemIndex].subItems[subIdx]) {
+                            data.lists[activeTab].items[itemIndex].subItems[subIdx].text = this.value;
+                        }
+                    } else {
+                        // Main item
+                        data.lists[activeTab].items[itemIndex].text = this.value;
+                    }
+                    await saveDatabase(data);
+                }
+            });
+
+            // Handle Enter key to focus next item or add-item input
+            input.addEventListener("keypress", function (e) {
+                if ((e as KeyboardEvent).key === "Enter") {
+                    e.preventDefault();
+                    
+                    // Find all text inputs
+                    const allInputs = Array.from(document.querySelectorAll('.item-text'));
+                    const currentIndex = allInputs.indexOf(this);
+                    
+                    if (currentIndex === allInputs.length - 2) { // Second to last (before add-item)
+                        // Focus the add-item input
+                        const addItemInput = document.querySelector('.new-item-input') as HTMLInputElement;
+                        if (addItemInput) {
+                            addItemInput.focus();
+                        }
+                    } else if (currentIndex < allInputs.length - 2) {
+                        // Focus next item
+                        (allInputs[currentIndex + 1] as HTMLInputElement).focus();
+                    }
+                }
+            });
+        });
+
+        // Handle delete buttons (both main items and sub-items)
+        document.querySelectorAll(".delete-btn").forEach((btn) => {
+            btn.addEventListener("click", async function () {
+                const itemIndex = parseInt(this.parentNode.dataset.index);
+                const subIndex = this.parentNode.dataset.subIndex;
+
+                // Update database
+                const data = await loadDatabase();
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get("tab");
+                const activeTab = tabParam ? parseInt(tabParam) : 0;
+                
+                if (data.lists[activeTab] && data.lists[activeTab].items[itemIndex]) {
+                    if (subIndex !== undefined) {
+                        // Delete sub-item
+                        const subIdx = parseInt(subIndex);
+                        if (data.lists[activeTab].items[itemIndex].subItems) {
+                            data.lists[activeTab].items[itemIndex].subItems.splice(subIdx, 1);
+                        }
+                    } else {
+                        // Delete main item
+                        data.lists[activeTab].items.splice(itemIndex, 1);
+                    }
+                    
+                    const saved = await saveDatabase(data);
+                    if (saved) {
+                        window.location.reload();
+                    }
+                }
+            });
+        });
+
+        // Function to setup listeners for new sub-items
+        function setupNewSubItemListeners(input, parentIndex) {
+            // Handle saving on blur or Enter
+            async function saveNewSubItem() {
+                const text = input.value.trim();
+                if (text) {
+                    // Update database
+                    const data = await loadDatabase();
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const tabParam = urlParams.get("tab");
+                    const activeTab = tabParam ? parseInt(tabParam) : 0;
+
+                    if (data.lists[activeTab] && data.lists[activeTab].items[parentIndex]) {
+                        if (!data.lists[activeTab].items[parentIndex].subItems) {
+                            data.lists[activeTab].items[parentIndex].subItems = [];
+                        }
+                        
+                        const newSubItem = { text: text, completed: false };
+                        data.lists[activeTab].items[parentIndex].subItems.push(newSubItem);
+
+                        const saved = await saveDatabase(data);
+                        if (saved) {
+                            window.location.reload();
+                        } else {
+                            alert("Failed to add sub-item");
+                        }
+                    }
+                } else {
+                    // Remove empty sub-item if no text was entered
+                    input.closest('.sub-item').remove();
+                }
+            }
+
+            input.addEventListener('blur', saveNewSubItem);
+            input.addEventListener('keypress', (e) => {
+                if ((e as KeyboardEvent).key === 'Enter') {
+                    e.preventDefault();
+                    input.blur(); // Trigger save
+                }
+            });
+        }
+
+        // Handle add sub-item buttons
+        document.querySelectorAll(".add-sub-btn").forEach((btn) => {
+            btn.addEventListener("click", function () {
+                const parentIndex = parseInt(this.getAttribute("data-parent-index"));
+                const itemGroup = this.closest('.item-group');
+                
+                // Create new sub-item element
+                const subItemDiv = document.createElement('div');
+                subItemDiv.className = 'list-item sub-item new-sub-item-container';
+                subItemDiv.setAttribute('data-index', parentIndex.toString());
+                subItemDiv.setAttribute('data-sub-index', 'new');
+                
+                subItemDiv.innerHTML = `
+                    <input type="checkbox" class="item-checkbox sub-item-checkbox">
+                    <input type="text" value="" placeholder="New sub-item..." class="item-text sub-item-text new-sub-item">
+                    <button class="delete-btn sub-delete-btn" title="Delete sub-item">×</button>
+                `;
+                
+                // Insert the new sub-item at the end of existing sub-items
+                itemGroup.appendChild(subItemDiv);
+                
+                // Focus the new input
+                const newInput = subItemDiv.querySelector('.new-sub-item') as HTMLInputElement;
+                newInput.focus();
+                newInput.select();
+                
+                // Add event listeners for the new sub-item
+                setupNewSubItemListeners(newInput, parentIndex);
+            });
+        });
+
+        // Handle adding new items
+        const newItemInput = document.querySelector(".new-item-input");
+
+        async function addNewItem() {
+            if (!newItemInput) return;
+
+            const text = (newItemInput as HTMLInputElement).value.trim();
+            if (text) {
+                // Update database
+                const data = await loadDatabase();
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabParam = urlParams.get("tab");
+                const activeTab = tabParam ? parseInt(tabParam) : 0;
+
+                if (data.lists[activeTab]) {
+                    const newItem = { text: text, completed: false };
+                    data.lists[activeTab].items.push(newItem);
+
+                    const saved = await saveDatabase(data);
+                    if (saved) {
+                        // Reload page to show new item
+                        window.location.reload();
+                    } else {
+                        alert("Failed to add item");
+                    }
+                }
+            }
+        }
+
+        if (newItemInput) {
+            newItemInput.addEventListener("keypress", function (e) {
+                if ((e as KeyboardEvent).key === "Enter") {
+                    // Set a flag in localStorage to refocus after reload
+                    localStorage.setItem('shouldFocusNewItem', 'true');
+                    addNewItem();
+                }
+            });
+
+            // Check if we should focus the input (after page reload)
+            if (localStorage.getItem('shouldFocusNewItem') === 'true') {
+                localStorage.removeItem('shouldFocusNewItem');
+                // Use setTimeout to ensure DOM is fully loaded
+                setTimeout(() => {
+                    (newItemInput as HTMLInputElement).focus();
+                }, 100);
+            }
+        }
+    </script>
+</Layout>

@@ -1,0 +1,554 @@
+---
+const { lists = [], activeTab = 0 } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Astro Lists</title>
+        <script>
+            // Immediate theme application - runs synchronously
+            (function() {
+                try {
+                    const savedTheme = localStorage.getItem('theme');
+                    // Always apply no-transition class to prevent flash
+                    document.documentElement.className = 'no-transition';
+                    // Default to dark mode if no preference is saved
+                    if (savedTheme === 'light') {
+                        document.documentElement.setAttribute('data-theme', 'light');
+                    } else {
+                        // Default to dark mode
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                    }
+                } catch (e) {}
+            })();
+        </script>
+        <style>
+            /* Universal transition blocking - applies immediately */
+            *, *::before, *::after {
+                transition: none !important;
+                animation: none !important;
+            }
+            
+            /* Re-enable transitions after load */
+            .transitions-enabled * {
+                transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important;
+            }
+            .transitions-enabled .theme-toggle {
+                transition: all 0.2s ease !important;
+            }
+            .transitions-enabled .item-text {
+                transition: all 0.2s ease !important;
+            }
+            .transitions-enabled .tab {
+                transition: all 0.2s ease !important;
+            }
+            .transitions-enabled .delete-btn,
+            .transitions-enabled .add-sub-btn,
+            .transitions-enabled .add-tab-btn {
+                transition: opacity 0.2s ease, background 0.2s ease !important;
+            }
+            
+            /* Critical: Disable transitions during theme load - must be first */
+            .no-transition,
+            .no-transition *,
+            .no-transition *::before,
+            .no-transition *::after {
+                transition: none !important;
+                animation: none !important;
+            }
+            
+            :root {
+                --bg-primary: #1a1a1a;
+                --bg-secondary: #2d2d2d;
+                --bg-tertiary: #404040;
+                --text-primary: #e0e0e0;
+                --text-secondary: #b0b0b0;
+                --text-muted: #808080;
+                --border-color: #404040;
+                --border-light: #2d2d2d;
+                --hover-bg: #1a2a3a;
+                --focus-color: #4a9eff;
+                --focus-shadow: rgba(74, 158, 255, 0.2);
+                --button-success: #28a745;
+                --button-danger: #ff4757;
+                --scrollbar-track: #2d2d2d;
+                --scrollbar-thumb: #555555;
+                --scrollbar-thumb-hover: #666666;
+            }
+
+            [data-theme="light"] {
+                --bg-primary: #ffffff;
+                --bg-secondary: #f8f9fa;
+                --bg-tertiary: #fafafa;
+                --text-primary: #333333;
+                --text-secondary: #666666;
+                --text-muted: #999999;
+                --border-color: #e1e5e9;
+                --border-light: #f0f0f0;
+                --hover-bg: #f0f7ff;
+                --focus-color: #0077ff;
+                --focus-shadow: rgba(0, 119, 255, 0.1);
+                --button-success: #28a745;
+                --button-danger: #ff4757;
+                --scrollbar-track: #f1f1f1;
+                --scrollbar-thumb: #c1c1c1;
+                --scrollbar-thumb-hover: #a1a1a1;
+            }
+
+            [data-theme="dark"] {
+                --bg-primary: #1a1a1a;
+                --bg-secondary: #2d2d2d;
+                --bg-tertiary: #404040;
+                --text-primary: #e0e0e0;
+                --text-secondary: #b0b0b0;
+                --text-muted: #808080;
+                --border-color: #404040;
+                --border-light: #2d2d2d;
+                --hover-bg: #1a2a3a;
+                --focus-color: #4a9eff;
+                --focus-shadow: rgba(74, 158, 255, 0.2);
+                --button-success: #28a745;
+                --button-danger: #ff4757;
+                --scrollbar-track: #2d2d2d;
+                --scrollbar-thumb: #555555;
+                --scrollbar-thumb-hover: #666666;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: var(--bg-primary);
+                color: var(--text-primary);
+                transition: background-color 0.3s ease, color 0.3s ease;
+                height: 100svh;
+            }
+
+            .top-bar {
+                position: sticky;
+                display: flex;
+                flex-direction: row;
+                z-index: 100;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                height: 60px;
+                align-items: end;
+                background-color: var(--bg-secondary);
+
+            }
+
+            .theme-toggle {
+                min-width: 60px;
+                background: var(--bg-tertiary);
+                border: 1px solid var(--border-color);
+                border-radius: 50%;
+                cursor: pointer;
+                font-size: 18px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                z-index: 1000;
+                height: 100%;
+            }
+
+            .theme-toggle:hover {
+                background: var(--hover-bg);
+                transform: scale(1.05);
+            }
+
+            .tabs {
+                display: flex;
+                height: 100%;
+                border-bottom: 2px solid var(--border-color);
+                padding: 0 2px;
+                align-items: end;
+                overflow-x: auto;
+                overflow-y: hidden;
+                white-space: nowrap;
+                scrollbar-width: thin;
+                width: 100%;
+            }
+            .tabs::-webkit-scrollbar {
+                height: 6px;
+            }
+            .tabs::-webkit-scrollbar-track {
+                background: var(--scrollbar-track);
+            }
+            .tabs::-webkit-scrollbar-thumb {
+                background: var(--scrollbar-thumb);
+                border-radius: 3px;
+            }
+            .tabs::-webkit-scrollbar-thumb:hover {
+                background: var(--scrollbar-thumb-hover);
+            }
+            .tab-wrapper {
+                display: flex;
+                align-items: center;
+                position: relative;
+                flex-shrink: 0;
+            }
+            .tab {
+                padding: 8px 0;
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-size: 16px;
+                color: var(--text-secondary);
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                min-width: 120px;
+                max-width: 200px;
+                border-radius: 10px 10px 0 0;
+            }
+            .tab:hover {
+                color: var(--focus-color);
+                background-color: var(--hover-bg);
+            }
+            .tab.active {
+                color: var(--focus-color);
+                font-weight: bold;
+                border-bottom-color: var(--focus-color);
+                background-color: var(--bg-primary);
+            }
+            .tab-name-input {
+                background: transparent;
+                border: none;
+                color: inherit;
+                font: inherit;
+                padding: 4px 8px;
+                width: 100%;
+                min-width: 60px;
+                outline: none;
+            }
+
+            .delete-tab-btn {
+                margin: 0px 12px;
+                background: var(--button-danger);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 18px;
+                height: 18px;
+                cursor: pointer;
+                font-size: 12px;
+                line-height: 1;
+                opacity: 0.7;
+                transition: opacity 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .delete-tab-btn:hover {
+                opacity: 1;
+            }
+            .tab-controls {
+                margin-left: 10px;
+                flex-shrink: 0;
+            }
+            .add-tab-btn {
+                background: var(--button-success);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                width: 28px;
+                height: 28px;
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1;
+                transition: background 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 8px 0;
+            }
+            .add-tab-btn:hover {
+                opacity: 0.8;
+            }
+            .no-tabs-message {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                padding: 12px 24px;
+                color: var(--text-secondary);
+                font-style: italic;
+            }
+            .tab-content {
+                padding: 20px;
+                min-height: 400px;
+                background-color: var(--bg-primary);
+            }
+                min-height: 400px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="top-bar">
+        <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+            ☀️
+        </button>
+        <div class="tabs">
+
+            {
+                lists.length > 0 &&
+                    lists.map((list, i) => (
+                        <div class="tab-wrapper">
+                            <div
+                                class={`tab ${i === activeTab ? "active" : ""}`}
+                                data-index={i}
+                                data-list-id={list.id}
+                            >
+                                <input
+                                    type="text"
+                                    value={list.name || "Untitled"}
+                                    class="tab-name-input"
+                                    data-list-id={list.id}
+                                    readonly={i !== activeTab}
+                                />
+                                {i === activeTab && (
+                                    <button
+                                        class="delete-tab-btn"
+                                        data-list-id={list.id}
+                                        title="Close tab"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))
+            }
+
+            <div class="tab-controls">
+                <button class="add-tab-btn" title="New tab">+</button>
+            </div>
+
+        </div>
+        </div>
+        <div class="tab-content">
+            <slot />
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                // Handle tab clicking (on the button, not the input)
+                document.querySelectorAll(".tab").forEach((tab) => {
+                    if (tab.classList.contains("active")) return; // Skip active tab
+                    tab.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        const idx = tab.getAttribute("data-index");
+
+                        if (idx !== null) {
+                            window.location.search = `?tab=${idx}`;
+                        }
+                    });
+                });
+
+                // Handle tab name editing
+                document
+                    .querySelectorAll(".tab-name-input")
+                    .forEach((input) => {
+                        // Double-click to edit
+                        input.addEventListener("dblclick", (e) => {
+                            e.stopPropagation(); // Don't trigger tab click
+                            input.removeAttribute("readonly");
+                            (input as HTMLInputElement).focus();
+                            (input as HTMLInputElement).select();
+                        });
+
+                        // Save on blur or Enter
+                        input.addEventListener("blur", () =>
+                            saveTabName(input),
+                        );
+                        input.addEventListener("keypress", (e) => {
+                            if ((e as KeyboardEvent).key === "Enter") {
+                                e.preventDefault();
+                                (input as HTMLInputElement).blur();
+                            }
+                            if ((e as KeyboardEvent).key === "Escape") {
+                                input.setAttribute("readonly", "readonly");
+                            }
+                        });
+                    });
+
+                // Handle delete tab buttons
+                document.querySelectorAll(".delete-tab-btn").forEach((btn) => {
+                    btn.addEventListener("click", (e) => {
+                        e.stopPropagation(); // Don't trigger tab click
+                        const listId = btn.getAttribute("data-list-id");
+                        if (listId) deleteTab(listId);
+                    });
+                });
+
+                // Handle add tab buttons
+                document.querySelectorAll(".add-tab-btn").forEach((btn) => {
+                    btn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        createBlankTab();
+                    });
+                });
+            });
+
+            async function saveTabName(input) {
+                const listId = input.getAttribute("data-list-id");
+                const newName = input.value.trim();
+
+                if (!newName) {
+                    input.value = "Untitled";
+                }
+
+                input.setAttribute("readonly", "readonly");
+
+                // Update database
+                try {
+                    const response = await fetch("/todo");
+                    if (response.ok) {
+                        const data = await response.json();
+                        const list = data.lists.find((l) => l.id === listId);
+                        if (list) {
+                            list.name = newName || "Untitled";
+                            const saved = await fetch("/todo", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(data),
+                            });
+                            
+                            if (saved.ok) {
+                                // Reload page to show updated tab name
+                                window.location.reload();
+                            } else {
+                                console.error("Failed to save tab name");
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error saving tab name:", error);
+                }
+            }
+
+            async function createBlankTab() {
+                try {
+                    const response = await fetch("/todo");
+                    const data = response.ok
+                        ? await response.json()
+                        : { lists: [] };
+
+                    const newList = {
+                        id:
+                            Date.now().toString(36) +
+                            Math.random().toString(36).substr(2),
+                        name: "", // Blank name
+                        items: [],
+                    };
+                    data.lists.push(newList);
+
+                    const saved = await fetch("/todo", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(data),
+                    });
+
+                    if (saved.ok) {
+                        // Navigate to the new tab
+                        const newTabIndex = data.lists.length - 1;
+                        window.location.href = `/?tab=${newTabIndex}&edit=true`;
+                    } else {
+                        alert("Failed to create list");
+                    }
+                } catch (error) {
+                    console.error("Error creating tab:", error);
+                    alert("Failed to create list");
+                }
+            }
+
+            async function deleteTab(listId) {
+                try {
+                    const response = await fetch("/todo");
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+                    const listIndex = data.lists.findIndex(
+                        (list) => list.id === listId,
+                    );
+                    if (listIndex === -1) return;
+
+                    data.lists.splice(listIndex, 1);
+
+                    const saved = await fetch("/todo", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(data),
+                    });
+
+                    if (saved.ok) {
+                        // Navigate to first tab or home if no tabs left
+                        if (data.lists.length > 0) {
+                            window.location.search = `?tab=${listIndex - 1}`;
+                        } else {
+                            window.location.search = "";
+                        }
+                    } else {
+                        alert("Failed to delete list");
+                    }
+                } catch (error) {
+                    console.error("Error deleting tab:", error);
+                    alert("Failed to delete list");
+                }
+            }
+
+            // Auto-edit blank tabs
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get("edit") === "true") {
+                setTimeout(() => {
+                    const activeInput = document.querySelector(
+                        ".tab.active .tab-name-input",
+                    );
+                    if (activeInput) {
+                        activeInput.removeAttribute("readonly");
+                        (activeInput as HTMLInputElement).focus();
+                        (activeInput as HTMLInputElement).select();
+                        // Remove edit parameter from URL
+                        urlParams.delete("edit");
+                        const newUrl =
+                            window.location.pathname +
+                            (urlParams.toString()
+                                ? "?" + urlParams.toString()
+                                : "");
+                        window.history.replaceState(null, "", newUrl);
+                    }
+                }, 100);
+            }
+
+            // Theme toggle functionality
+            const themeToggle = document.getElementById('themeToggle');
+            
+            if (themeToggle) {
+                // Re-enable transitions after DOM is ready
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        document.documentElement.classList.remove('no-transition');
+                        document.documentElement.classList.add('transitions-enabled');
+                    });
+                });
+                
+                // Check for saved theme preference or default to dark mode
+                const currentTheme = localStorage.getItem('theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', currentTheme);
+                themeToggle.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+                
+                themeToggle.addEventListener('click', () => {
+                    const currentTheme = document.documentElement.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+                });
+            }
+        </script>
+    </body>
+</html>
